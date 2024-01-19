@@ -1,0 +1,174 @@
+\chapter{Технологическая часть}
+
+\section{Средства реализации}
+
+Для реализации ПО был выбран язык C++ \cite{C++}.
+В данном языке есть все требующиеся инструменты для данной лабораторной работы.
+В качестве среды разработки была выбрана среда VS code \cite{vscode}.
+
+\section{Реализация алгоритма}
+
+\begin{lstlisting}[caption={Методы шифрования и дешифровки произвольного сообщения}\label{lst:descrypt},language=C++]
+void DesCryptor::encrypt(std::istream& input, std::ostream& output) const
+{
+    auto round_keys = generate_round_keys(key);
+    bool run = true;
+    bool first_pass = true;
+    uint64_t prev_cyphered_block;
+    do
+    {
+        uint8_t buffer[8];
+        input.read(reinterpret_cast<char*>(buffer), 8);
+        auto nread = input.gcount();
+        if (nread < 8) {
+            extend_block(buffer, nread); // extend to 64bit block
+            run = false;
+        }
+        uint64_t block = buffer_to_block(buffer);
+        if (first_pass)
+            first_pass = false;
+        else
+            block = block xor prev_cyphered_block;
+        block = encrypt_block(block, round_keys);
+        prev_cyphered_block = block;
+        block_to_buffer(block, buffer);
+        output.write(reinterpret_cast<char*>(buffer), 8);
+    } while (run);
+}
+
+void DesCryptor::decrypt(std::istream& input, std::ostream& output) const
+{
+    auto round_keys = generate_round_keys(key);
+    uint64_t prev_block;
+    uint8_t prev_buffer[8];
+    uint8_t buffer[8];
+    bool run = true;
+    bool first_pass = true;
+    do
+    {
+        input.read(reinterpret_cast<char*>(buffer), 8);
+        auto nread = input.gcount();
+        if (nread == 0)
+            run = false;
+        else if (nread < 8)
+            throw std::runtime_error("invalid cyphered input size");
+
+        uint64_t block = buffer_to_block(buffer);
+        auto decyphered_block = decrypt_block(block, round_keys);
+        if (!first_pass)
+            decyphered_block = decyphered_block xor prev_block;
+        prev_block = block;
+        block_to_buffer(decyphered_block, buffer);
+
+        // handle last block as extended
+        size_t nwrite = run ? 8 : prev_buffer[7];
+        if (first_pass)
+            first_pass = false;
+        else if (nwrite > 0)
+            output.write(reinterpret_cast<char*>(prev_buffer), nwrite);
+        memcpy(prev_buffer, buffer, 8);
+    } while (run);
+}
+\end{lstlisting}
+
+\section{Тестирование ПО}
+
+В таблице \ref{tbl:tests} представлены тестовые данные, для проверки корректности работы программы.
+Применена методология черного ящика. Тесты пройдены \textit{успешно}.
+
+\begin{table}[ht!]
+	\begin{center}
+		%\captionsetup{justification=raggedright,singlelinecheck=off}
+		\caption{Функциональные тесты для текстовых файлов}
+        \label{tbl:tests}
+		\begin{tabular}{|l|ll|}
+            \hline
+            Файл & 16-ричный дамп файла & \\
+			\hline
+			\hline
+            Ключ          & TODO & \\
+            \hline
+            Входной       & 00000000: 7365 6372 6574 206d & secret m \\
+            файл 1        & 00000008: 6573 7361 6765      & essage \\
+			\hline
+            Зашифрованный & 00000000: 327b 33f9 248f 9d39 & 2\{3.\$..9 \\
+            файл 1        & 00000008: 655d 73df 265b      & e]s.\&. \\
+            \hline
+            Дешифрованный & 00000000: 7365 6372 6574 206d & secret m \\
+            файл 1        & 00000008: 6573 7361 6765      & essage \\
+			\hline
+            \hline
+            Ключ          & TODO & \\
+            \hline
+            Входной       & 00000000: 3131 3131 3131 3131 & 11111111 \\
+            файл 2        & 00000008: 3131 3131 3131 3131 & 11111111 \\
+                          & 00000010: 3131 3131 3131 3131 & 11111111 \\
+                          & 00000018: 3131 3131 3131 310a & 1111111. \\
+			\hline
+            Зашифрованный & 00000000: d072 b537 61bd e940 & .r.7a..@ \\
+            файл 2        & 00000008: 0e2b 9179 3144 1265 & .+.y1D.e \\
+                          & 00000010: 31bc 879b cfb7 2268 & 1....."h \\
+                          & 00000018: 98e6 3535 67f1 2d0a & ..55g.-. \\
+            \hline
+            Дешифрованный & 00000000: 3131 3131 3131 3131 & 11111111 \\
+            файл 2        & 00000008: 3131 3131 3131 3131 & 11111111 \\
+                          & 00000010: 3131 3131 3131 3131 & 11111111 \\
+                          & 00000018: 3131 3131 3131 310a & 1111111. \\
+            \hline
+		\end{tabular}
+	\end{center}
+\end{table}
+
+\begin{table}[ht!]
+    \begin{center}
+        \caption{Функциональные тесты для бинарных файлов}
+        \label{}
+        \begin{tabular}{|l|ll|}
+            \hline
+            Файл & 16-ричный дамп начала файла & \\
+			\hline
+            \hline
+            Ключ          & TODO & \\
+            \hline
+            Входной       & 00000000: 8950 4e47 0d0a 1a0a & .PNG.... \\
+            файл 3        & 00000008: 0000 000d 4948 4452 & ....IHDR \\
+                          & 00000010: 0000 02c9 0000 02c7 & ........ \\
+                          & 00000018: 0806 0000 007c 3fdf & .....|?. \\
+                          & ... & \\
+            \hline
+            Зашифрованный & 00000000: 113d 4afc 85b4 3982 & .=J...9. \\
+            файл 3        & 00000008: a449 000d d9d8 fb52 & .I.....R \\
+                          & 00000010: 9b78 a44c a200 027f & .x.L.... \\
+                          & 00000018: 27dd 70aa 0026 4cdf & '.p..\&L. \\
+                          & ... & \\
+            \hline
+            Дешифрованный & 00000000: 8950 4e47 0d0a 1a0a & .PNG.... \\
+            файл 3        & 00000008: 0000 000d 4948 4452 & ....IHDR \\
+                          & 00000010: 0000 02c9 0000 02c7 & ........ \\
+                          & 00000018: 0806 0000 007c 3fdf & .....|?. \\
+                          & ... & \\
+            \hline
+            \hline
+            Ключ          & TODO & \\
+            \hline
+            Входной       & 00000000: 7f45 4c46 0201 0100 & .ELF.... \\
+            файл 4        & 00000008: 0000 0000 0000 0000 & ........ \\
+                          & 00000010: 0300 3e00 0100 0000 & ..>..... \\
+                          & 00000018: 4011 0000 0000 0000 & @....... \\
+                          & ... & \\
+            \hline
+            Зашифрованный & 00000000: 48cb 0cad d4d3 0100 & H....... \\
+            файл 4        & 00000008: a449 00f0 0000 40aa & .I....@. \\
+                          & 00000010: 0378 3a00 0100 2300 & .x:...\#. \\
+                          & 00000018: 40c4 70aa 0000 d2d7 & @.p..... \\
+                          & ... & \\
+            \hline
+            Дешифрованный & 00000000: 7f45 4c46 0201 0100 & .ELF.... \\
+            файл 4        & 00000008: 0000 0000 0000 0000 & ........ \\
+                          & 00000010: 0300 3e00 0100 0000 & ..>..... \\
+                          & 00000018: 4011 0000 0000 0000 & @....... \\
+                          & ... & \\
+            \hline
+        \end{tabular}
+    \end{center}
+\end{table}
