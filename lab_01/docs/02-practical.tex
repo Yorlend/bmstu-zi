@@ -1,0 +1,260 @@
+
+\chapter{Технологическая часть}
+
+\section{Средства реализации}
+
+Для реализации ПО был выбран язык C++ \cite{C++}.
+Данный язык позволяет программировать в объектно-ориентированном стиле.
+
+В качестве среды разработки была выбрана среда VS code \cite{vscode}.
+В качестве средства сборки программы используется утилита Make.
+
+\section{Реализация алгоритма}
+
+На листинге \ref{lst:enigma} представлен класс представляющий шифровальную машину.
+Листинг \ref{lst:rotor} содержит класс, представляющий отдельный ротор.
+На листинге \ref{lst:reflector} представлен класс рефлектора.
+
+\begin{lstlisting}[caption={Класс Энигмы}\label{lst:enigma},language=C++]
+class Enigma final {
+public:
+    explicit Enigma(int seed) noexcept;
+    ~Enigma() = default;
+
+    void encrypt(std::istream& input, std::ostream& output);
+private:
+    void rotate();
+    std::array<Rotor, 3> rotors;
+    Reflector reflector;
+};
+
+Enigma::Enigma(int seed) noexcept : rotors{Rotor::buildRandom(seed), Rotor::buildRandom(seed + 1), Rotor::buildRandom(seed + 2)} , reflector(Reflector::buildRandom(seed + 3)) {}
+
+void Enigma::encrypt(std::istream& input, std::ostream& output) {
+    do {
+        uint8_t symbol = input.get();
+        if (input.eof()) break;
+
+        symbol = rotors[0].forward(symbol);
+        symbol = rotors[1].forward(symbol);
+        symbol = rotors[2].forward(symbol);
+
+        symbol = reflector.reflect(symbol);
+
+        symbol = rotors[2].backward(symbol);
+        symbol = rotors[1].backward(symbol);
+        symbol = rotors[0].backward(symbol);
+
+        output.put(symbol);
+        rotate();
+    } while (true);
+}
+
+void Enigma::rotate() {
+    if (rotors[0].rotate())
+        if (rotors[1].rotate())
+            rotors[2].rotate();
+}
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Класс ротора}\label{lst:rotor},language=C++]
+class Rotor final {
+public:
+    Rotor(const Rotor &) = delete;
+    Rotor(Rotor &&) = default;
+    Rotor &operator=(const Rotor &) = delete;
+    Rotor &operator=(Rotor &&) = default;
+    ~Rotor() = default;
+
+    uint8_t forward(uint8_t input) const noexcept;
+    uint8_t backward(uint8_t input) const noexcept;
+    /* returns true on full rotation */
+    bool rotate() noexcept;
+    static Rotor buildRandom(int seed);
+    static const int capacity = 256;
+private:
+    Rotor(std::array<uint8_t, 256> forward_pass, std::array<uint8_t, 256> backward_pass);
+    int rotation = 0;
+    std::array<uint8_t, 256> forward_pass;
+    std::array<uint8_t, 256> backward_pass;
+};
+
+uint8_t Rotor::forward(uint8_t input) const noexcept {
+    return forward_pass[input % capacity];
+}
+
+uint8_t Rotor::backward(uint8_t input) const noexcept {
+    return backward_pass[input % capacity];
+}
+
+bool Rotor::rotate() noexcept {
+    auto tmp = forward_pass[0];
+    std::copy(forward_pass.begin() + 1, forward_pass.end(), forward_pass.begin());
+    forward_pass[capacity - 1] = tmp;
+    for (int pos = 0; pos < capacity; pos++)
+        backward_pass[forward_pass[pos]] = pos;
+    rotation = (rotation + 1) % capacity;
+    return rotation == 0;
+}
+
+Rotor Rotor::buildRandom(int seed) {
+    std::mt19937 random_generator(seed);
+    std::array<uint8_t, 256> forward_pass;
+    std::array<uint8_t, 256> backward_pass;
+
+    for (int pos = 0; pos < capacity; pos++)
+        forward_pass[pos] = pos;
+    std::shuffle(forward_pass.begin(), forward_pass.end(), random_generator);
+    for (int pos = 0; pos < capacity; pos++)
+        backward_pass[forward_pass[pos]] = pos;
+    return Rotor(forward_pass, backward_pass);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Класс рефлектора}\label{lst:reflector},language=C++]
+class Reflector final {
+public:
+    Reflector(const Reflector &) = delete;
+    Reflector(Reflector &&) = default;
+    Reflector &operator=(const Reflector &) = delete;
+    Reflector &operator=(Reflector &&) = default;
+    ~Reflector() = default;
+
+    uint8_t reflect(uint8_t input) const noexcept;
+    static Reflector buildRandom(int seed) noexcept;
+private:
+    explicit Reflector(std::array<uint8_t, 256> wires) noexcept;
+    std::array<uint8_t, 256> wires;
+};
+
+uint8_t Reflector::reflect(uint8_t input) const noexcept {
+    return wires[input];
+}
+
+Reflector Reflector::buildRandom(int seed) noexcept {
+    std::mt19937 random_generator(seed);
+    std::array<uint8_t, 256> wires;
+    wires.fill(0);
+    int zero_pos = random_generator() % 256;
+    wires[0] = zero_pos;
+    int i = 0;
+    while (1) {
+        while (i < 256 && wires[i] != 0) i++;
+        if (i >= 256) break;
+        if (i == zero_pos) {
+            i++;
+            continue;
+        }
+
+        int pos = random_generator() % 256;
+        while (wires[pos] != 0 || pos == zero_pos)
+            pos = (pos + 1) % 256;
+        wires[pos] = i;
+        wires[i] = pos;
+    }
+    
+    return Reflector(wires);
+}
+\end{lstlisting}
+
+\clearpage
+
+\section{Тестирование ПО}
+
+Тестирование ПО проводится следующим образом. Для каждого из подготовленных входных файлов сначала запускается программа, которая создает зашифрованный файл. Затем полученные зашифрованные файлы снова подаются на вход программе. Полученные на втором шаге файлы сравниваются побайтово с исходными файлами и в случае отсутствия отличий тесты признаются успешно пройденными.
+
+Вывод 16-ричного дампа файла производится с помощью стандартной утилиты \texttt{xxd}, побайтовое сравнение осуществляется с применением команды \texttt{diff}.
+
+В таблице \ref{tbl:test} приведены тесты для алгоритма шифрования Энигмы. 
+Применена методология черного ящика. Тесты пройдены \textit{успешно}.
+
+\begin{table}[ht!]
+	\begin{center}
+		%\captionsetup{justification=raggedright,singlelinecheck=off}
+		\caption{Функциональные тесты для текстовых файлов}
+        \label{tbl:test}
+		\begin{tabular}{|l|ll|}
+            \hline
+            Файл & 16-ричный дамп файла & \\
+			\hline
+			\hline
+            Входной       & 00000000: 7365 6372 6574 206d & secret m \\
+            файл 1        & 00000008: 6573 7361 6765      & essage \\
+			\hline
+            Зашифрованный & 00000000: 327b 33f9 248f 9d39 & 2\{3.\$..9 \\
+            файл 1        & 00000008: 655d 73df 265b      & e]s.\&. \\
+            \hline
+            Дешифрованный & 00000000: 7365 6372 6574 206d & secret m \\
+            файл 1        & 00000008: 6573 7361 6765      & essage \\
+			\hline
+            \hline
+            Входной       & 00000000: 3131 3131 3131 3131 & 11111111 \\
+            файл 2        & 00000008: 3131 3131 3131 3131 & 11111111 \\
+                          & 00000010: 3131 3131 3131 3131 & 11111111 \\
+                          & 00000018: 3131 3131 3131 310a & 1111111. \\
+            \hline
+            Зашифрованный & 00000000: d072 b537 61bd e940 & .r.7a..@ \\
+            файл 2        & 00000008: 0e2b 9179 3144 1265 & .+.y1D.e \\
+                          & 00000010: 31bc 879b cfb7 2268 & 1....."h \\
+                          & 00000018: 98e6 3535 67f1 2d0a & ..55g.-. \\
+            \hline
+            Дешифрованный & 00000000: 3131 3131 3131 3131 & 11111111 \\
+            файл 2        & 00000008: 3131 3131 3131 3131 & 11111111 \\
+                          & 00000010: 3131 3131 3131 3131 & 11111111 \\
+                          & 00000018: 3131 3131 3131 310a & 1111111. \\
+            \hline
+		\end{tabular}
+	\end{center}
+\end{table}
+
+\begin{table}[ht!]
+    \begin{center}
+        \caption{Функциональные тесты для бинарных файлов}
+        \label{}
+        \begin{tabular}{|l|ll|}
+            \hline
+            Файл & 16-ричный дамп начала файла & \\
+			\hline
+            \hline
+            Входной       & 00000000: 8950 4e47 0d0a 1a0a & .PNG.... \\
+            файл 3        & 00000008: 0000 000d 4948 4452 & ....IHDR \\
+                          & 00000010: 0000 02c9 0000 02c7 & ........ \\
+                          & 00000018: 0806 0000 007c 3fdf & .....|?. \\
+                          & ... & \\
+            \hline
+            Зашифрованный & 00000000: 113d 4afc 85b4 3982 & .=J...9. \\
+            файл 3        & 00000008: a449 000d d9d8 fb52 & .I.....R \\
+                          & 00000010: 9b78 a44c a200 027f & .x.L.... \\
+                          & 00000018: 27dd 70aa 0026 4cdf & '.p..\&L. \\
+                          & ... & \\
+            \hline
+            Дешифрованный & 00000000: 8950 4e47 0d0a 1a0a & .PNG.... \\
+            файл 3        & 00000008: 0000 000d 4948 4452 & ....IHDR \\
+                          & 00000010: 0000 02c9 0000 02c7 & ........ \\
+                          & 00000018: 0806 0000 007c 3fdf & .....|?. \\
+                          & ... & \\
+            \hline
+            \hline
+            Входной       & 00000000: 7f45 4c46 0201 0100 & .ELF.... \\
+            файл 4        & 00000008: 0000 0000 0000 0000 & ........ \\
+                          & 00000010: 0300 3e00 0100 0000 & ..>..... \\
+                          & 00000018: 4011 0000 0000 0000 & @....... \\
+                          & ... & \\
+            \hline
+            Зашифрованный & 00000000: 48cb 0cad d4d3 0100 & H....... \\
+            файл 4        & 00000008: a449 00f0 0000 40aa & .I....@. \\
+                          & 00000010: 0378 3a00 0100 2300 & .x:...\#. \\
+                          & 00000018: 40c4 70aa 0000 d2d7 & @.p..... \\
+                          & ... & \\
+            \hline
+            Дешифрованный & 00000000: 7f45 4c46 0201 0100 & .ELF.... \\
+            файл 4        & 00000008: 0000 0000 0000 0000 & ........ \\
+                          & 00000010: 0300 3e00 0100 0000 & ..>..... \\
+                          & 00000018: 4011 0000 0000 0000 & @....... \\
+                          & ... & \\
+            \hline
+        \end{tabular}
+    \end{center}
+\end{table}
+
+\clearpage
