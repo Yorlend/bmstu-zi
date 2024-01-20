@@ -12,21 +12,27 @@ int main(int argc, const char *argv[])
         return 1;
     }
 
-    std::ifstream input(argv[1], std::ios::in|std::ios::binary);
+    std::ifstream input(argv[1], std::ios::in | std::ios::binary);
     if (!input.is_open())
     {
         std::cerr << "Failed to open input file" << std::endl;
         return 1;
     }
 
-    std::ofstream output(argv[2], std::ios::out|std::ios::binary);
+    std::ofstream output(argv[2], std::ios::out | std::ios::binary);
     if (!output.is_open())
     {
         std::cerr << "Failed to open output file" << std::endl;
         return 1;
     }
 
-    Enigma enigma(enigma_default_seed);
+    std::map<uint8_t, uint8_t> commutationMap = {
+        {'A', 'B'},
+        {'C', 'E'},
+    };
+    auto comPanel = std::make_shared<ComPanel>(commutationMap);
+
+    Enigma enigma(enigma_default_seed, comPanel);
 
     enigma.encrypt(input, output);
     return 0;
