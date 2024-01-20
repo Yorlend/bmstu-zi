@@ -9,3 +9,4 @@
 **/*.toc
 **/*.bcf
 **/*.run.xml
+**/build/**
