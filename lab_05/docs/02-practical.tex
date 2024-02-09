@@ -1,0 +1,71 @@
+\chapter{Технологическая часть}
+
+\section{Средства реализации}
+
+Для реализации ПО был выбран язык C++ \cite{C++}.
+В данном языке есть все требующиеся инструменты для данной лабораторной работы.
+В качестве среды разработки была выбрана среда VS code \cite{vscode}.
+
+\section{Реализация алгоритма}
+
+Реализация кодирования LZW.
+
+\begin{lstlisting}
+void compressInternal(const std::vector<uint8_t>& inputFile)
+{
+    initializeDictionary();
+
+    std::vector<uint8_t> currentSubsequence;
+    int nextIndex = 0;
+    uint8_t nextByte;
+    TrieNode* currentNode = rootNode;
+
+    int code = 0xFF + 1;
+
+    while (nextIndex < inputFile.size())
+    {
+        nextByte = inputFile[nextIndex];
+        if (currentNode->children.contains(nextByte))
+        {
+            currentNode = &currentNode->children[nextByte];
+            nextIndex++;
+        }
+        else
+        {
+            tempOut->emplace_back(currentNode->code, getBitsToRepresentInteger(code));
+            currentNode->children[nextByte].code = code;
+            code++;
+            currentNode = rootNode;
+        }
+    }
+
+    if (currentNode != rootNode)
+    {
+        tempOut->emplace_back(currentNode->code, getBitsToRepresentInteger(code));
+    }
+
+    std::cout << "dict size: " << getDictSize() << std::endl;
+}
+\end{lstlisting}
+
+\section{Тестирование ПО}
+
+В таблице \ref{tbl:functional_test} приведены тесты для алгоритма шифрования LZW. 
+Применена методология черного ящика. Тесты пройдены \textit{успешно}.
+
+\begin{table}[ht!]
+	\begin{center}
+		\captionsetup{justification=raggedright,singlelinecheck=off}
+		\caption{\label{tbl:functional_test} Функциональные тесты}
+		\begin{tabular}{|c|c|c|}
+			\hline
+			Входная строка & Размер входной (Байт) & Размер выходной (Байт) \\ 
+			\hline
+			$aba$          & 3  & 4 \\
+			$abaaba$       & 6  & 6 \\
+			<<>>           & 0  & 0 \\
+            $abaabaabaaba$ & 12 & 8 \\
+			\hline
+		\end{tabular}
+	\end{center}
+\end{table}

@@ -1,0 +1,37 @@
+\chapter{Технологическая часть}
+
+\section{Средства реализации}
+
+Для реализации ПО был выбран язык C++ \cite{C++}.
+В данном языке есть все требующиеся инструменты для данной лабораторной работы.
+В качестве среды разработки была выбрана среда VS code \cite{vscode}.
+
+\section{Реализация алгоритма}
+
+На листинге ниже приведен алгоритм создания и проверки цифровой подписи.
+
+\begin{lstlisting}[caption={Алгоритм создания и проверки цифровой подписи}]
+bool checkSignature(const char* filename) {
+    auto input = readFile(filename);
+    const auto hash = md5(input);
+
+    // Signature creation
+    std::vector<long long> vec(hash.size());
+    for (const auto c : hash)
+        vec.push_back(static_cast<long long>(c));
+
+    // Keys
+    Keys keys = calculateRSAKeys();
+    const auto sign = cryptMessage(vec, keys._private);
+    
+    const auto input2 = readFile(filename);
+
+    // Signature verification
+    const auto originalHash = md5(input2);
+
+    auto signatureHash = encryptMessage(sign, keys._public);
+    signatureHash = extractHash(signatureHash);
+
+    return originalHash == signatureHash;
+}
+\end{lstlisting}
